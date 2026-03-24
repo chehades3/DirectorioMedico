@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Directorio Industria Médica – BC</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',sans-serif;background:#eef2f7;height:100vh;display:flex;flex-direction:column}
+
+/* ── Header ── */
+#hdr{
+  padding:9px 18px;background:#fff;border-bottom:1px solid #dde3ec;
+  display:flex;align-items:center;gap:11px;flex-wrap:wrap;
+  box-shadow:0 1px 5px rgba(0,0,0,.07);z-index:1000;position:relative
+}
+#hdr h1{font-size:14px;font-weight:700;color:#1d3a5f;white-space:nowrap}
+.cnt{background:#e8f0fb;color:#2563a8;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:600;border:1px solid #c5d8f5}
+#ctrl{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-left:auto}
+#ctrl select,#ctrl input{background:#f7f9fc;border:1px solid #c8d4e3;color:#2a3a50;padding:4px 9px;border-radius:6px;font-size:12px;outline:none}
+#ctrl select:focus,#ctrl input:focus{border-color:#3b82f6}
+.chk{font-size:12px;color:#4a5f78;display:flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap}
+
+/* ── Map ── */
+#map{flex:1;position:relative;overflow:hidden}
+#svgLayer,#lblLayer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+#svgLayer{z-index:390;overflow:visible}
+#lblLayer{z-index:410}
+
+.lbl{
+  position:absolute;
+  background:rgba(255,255,255,.96);
+  border:1px solid #cdd8ea;
+  border-radius:3px;
+  padding:1px 6px 1px 5px;
+  font-size:10px;font-weight:600;color:#1c3250;
+  white-space:nowrap;
+  box-shadow:0 1px 4px rgba(0,0,0,.1);
+  transform:translate(0,-50%);
+  pointer-events:auto;cursor:pointer;
+  transition:opacity .15s, box-shadow .15s;
+  min-opacity:0.75
+}
+.lbl:hover{
+  background:#fff;
+  box-shadow:0 2px 10px rgba(0,0,0,.18);
+  z-index:999;opacity:1!important
+}
+
+/* ── Ficha lateral ── */
+#ficha{
+  position:absolute;
+  top:12px;right:12px;
+  width:300px;
+  background:#fff;
+  border-radius:12px;
+  box-shadow:0 8px 32px rgba(0,0,0,.16);
+  border:1px solid #dde3ec;
+  z-index:800;
+  overflow:hidden;
+  transform:translateX(340px);
+  transition:transform .28s cubic-bezier(.4,0,.2,1);
+  pointer-events:auto
+}
+#ficha.open{transform:translateX(0)}
+#ficha-header{
+  padding:14px 16px 12px;
+  border-bottom:1px solid #edf1f7
+}
+#ficha-close{
+  position:absolute;top:10px;right:12px;
+  background:none;border:none;cursor:pointer;
+  color:#8a9bb5;font-size:18px;line-height:1;
+  padding:2px 5px;border-radius:4px
+}
+#ficha-close:hover{background:#f0f4f8;color:#1d3a5f}
+#ficha-nombre{
+  font-size:13.5px;font-weight:700;color:#1d3a5f;
+  line-height:1.35;padding-right:22px;margin-bottom:6px
+}
+#ficha-muni{
+  display:inline-block;padding:2px 9px;border-radius:10px;
+  font-size:11px;font-weight:600
+}
+#ficha-body{padding:12px 16px;display:flex;flex-direction:column;gap:9px}
+.ficha-row{display:flex;gap:8px;align-items:flex-start}
+.ficha-icon{
+  width:26px;height:26px;border-radius:6px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:13px;flex-shrink:0;margin-top:1px
+}
+.ficha-label{font-size:10.5px;color:#8a9bb5;font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:1px}
+.ficha-val{font-size:12.5px;color:#1d3a5f;line-height:1.4}
+#ficha-footer{
+  padding:10px 16px 12px;
+  border-top:1px solid #edf1f7;
+  display:flex;gap:8px
+}
+.ficha-btn{
+  flex:1;padding:7px 0;border-radius:7px;
+  font-size:12px;font-weight:600;border:none;cursor:pointer;
+  transition:background .15s
+}
+.btn-maps{background:#e8f0fb;color:#2563a8}
+.btn-maps:hover{background:#dbeafe}
+
+/* badge colors */
+.btj{background:#dbeafe;color:#1d4ed8}
+.bmx{background:#dcfce7;color:#15803d}
+.ben{background:#fef3c7;color:#92400e}
+.bro{background:#f3e8ff;color:#7e22ce}
+.bte{background:#fee2e2;color:#b91c1c}
+
+/* icon backgrounds */
+.ic-serv{background:#e8f0fb}
+.ic-emp{background:#dcfce7}
+.ic-ori{background:#fef3c7}
+.ic-dir{background:#f0f4f8}
+.ic-cert{background:#f3e8ff}
+</style>
+</head>
+<body>
+
+<div id="hdr">
+  <h1>🏥 Industria Médica — Baja California</h1>
+  <span class="cnt" id="cntBadge">115 empresas</span>
+  <div id="ctrl">
+    <select id="fMuni" onchange="applyFilter()">
+      <option value="">Todos los municipios</option>
+      <option>Tijuana</option><option>Mexicali</option>
+      <option>Ensenada</option><option value="Playas De Rosarito">Rosarito</option>
+      <option>Tecate</option>
+    </select>
+    <input id="fSearch" type="text" placeholder="Buscar empresa…" oninput="applyFilter()" style="width:170px"/>
+    <label class="chk"><input type="checkbox" id="chkL" checked onchange="schedRedraw()"> Etiquetas</label>
+    <label class="chk"><input type="checkbox" id="chkC" checked onchange="schedRedraw()"> Conectores</label>
+  </div>
+</div>
+
+<div id="map">
+  <svg id="svgLayer"></svg>
+  <div id="lblLayer"></div>
+
+  <!-- Ficha empresa -->
+  <div id="ficha">
+    <div id="ficha-header">
+      <button id="ficha-close" onclick="closeCard()">✕</button>
+      <div id="ficha-nombre">—</div>
+      <span id="ficha-muni" class="btj">—</span>
+    </div>
+    <div id="ficha-body">
+      <div class="ficha-row">
+        <div class="ficha-icon ic-serv">🔬</div>
+        <div><div class="ficha-label">Servicio / Producto</div><div class="ficha-val" id="fc-serv">—</div></div>
+      </div>
+      <div class="ficha-row">
+        <div class="ficha-icon ic-emp">👥</div>
+        <div><div class="ficha-label">Empleos</div><div class="ficha-val" id="fc-emp">—</div></div>
+      </div>
+      <div class="ficha-row">
+        <div class="ficha-icon ic-ori">🌍</div>
+        <div><div class="ficha-label">Origen del capital</div><div class="ficha-val" id="fc-ori">—</div></div>
+      </div>
+      <div class="ficha-row">
+        <div class="ficha-icon ic-cert">🏅</div>
+        <div><div class="ficha-label">Certificaciones</div><div class="ficha-val" id="fc-cert">—</div></div>
+      </div>
+      <div class="ficha-row">
+        <div class="ficha-icon ic-dir">📍</div>
+        <div><div class="ficha-label">Dirección</div><div class="ficha-val" id="fc-dir">—</div></div>
+      </div>
+    </div>
+    <div id="ficha-footer">
+      <button class="ficha-btn btn-maps" id="btn-maps" onclick="openMaps()">📍 Ver en Google Maps</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const DATA = [{"empresa": "(AVANOS) AVENT, S. DE R.L. DE C.V.", "base": "AVENT", "municipio": "Tijuana", "servicio": "Ensamble de productos médicos: batas quirúrgicas, accesorios para", "empleos": "600", "origen": "Estados Unidos", "certificaciones": "ISO 13485", "direccion": "Av. Noruega D1 B, Parque Industrial La Mesa, Tijuana, BC 22105", "lat": 32.4758596, "lng": -116.9490258}, {"empresa": "(BAXTER- HILLROM) WELCH ALLYN DE MÉXICO, S. DE", "base": "WELCH ALLYN DE MEXICO S DE", "municipio": "Tijuana", "servicio": "Manufactura de termómetros digitales, bandas para tomar la presión", "empleos": "1000", "origen": "Estados Unidos", "certificaciones": "ISO 13485", "direccion": "Calle Emilio Flores 2471-A, Col. Cañón del Padre, C.P. 22203, Tijuana, BC", "lat": 32.5252922, "lng": -116.9057569}, {"empresa": "(BECTON DICKISON) SISTEMAS MEDICOS ALARIS, S.A. DE – Medication Management", "base": "SISTEMAS MEDICOS ALARIS SA DE", "municipio": "Tijuana", "servicio": "Manufactura de dispositivos de terapia intravenosa — sets de infusión,", "empleos": "5900", "origen": "Estados Unidos", "certificaciones": "ISO 9001, ISO 13485, ISO 14001, C-TPAT, EMPRESA SEGURA,", "direccion": "Parque Industrial El Florido Sección Vistas, Tijuana, BC", "lat": 32.4525246, "lng": -116.8829363}, {"empresa": "(BECTON DICKISON) SISTEMAS MEDICOS ALARIS, S.A. DE – Planta Alaris", "base": "SISTEMAS MEDICOS ALARIS SA DE", "municipio": "Tijuana", "servicio": "Manufactura de dispositivos de terapia intravenosa — sets de infusión,", "empleos": "5900", "origen": "Estados Unidos", "certificaciones": "ISO 9001, ISO 13485, ISO 14001, C-TPAT, EMPRESA SEGURA,", "direccion": "Blvd. Insurgentes 20351, Parque Industrial El Florido Vistas 1, C.P. 22244, Tijuana, BC", "lat": 32.4537734, "lng": -116.8897781}, {"empresa": "(ENOVIS) DJ ORTHOPEDICS DE MÉXICO, S.A. DE C.V.", "base": "DJ ORTHOPEDICS DE MEXICO", "municipio": "Tijuana", "servicio": "Fabricación de soportes ortopédicos, férulas, órtesis, rodilleras,", "empleos": "1800", "origen": "Estados Unidos", "certificaciones": "ISO 13485:2016,C-TPAT, OEA, NOM-241-SSA1-2021, FDA, CE:", "direccion": "Calle Camino Viejo a Tecate 17030, Int. 15-17, C.P. 22120, Tijuana, BC", "lat": 32.473714, "lng": -116.9296884}, {"empresa": "(FRESENIUS) MEDIMÉXICO, S. DE R.L. DE C.V.", "base": "MEDIMEXICO", "municipio": "Tijuana", "servicio": "Manufactura y ensamble de componentes desechables para diálisis", "empleos": "2200", "origen": "Alemania", "certificaciones": "ISO 13485, Regulaciones FDA", "direccion": "Calle Valle Grande 10523, Parque Ind. Valle del Sur, C.P. 22637, Tijuana, BC", "lat": 32.4740713, "lng": -117.0251444}, {"empresa": "(NEO TECH) ONCORE DE MÉXICO, S.A. DE C.V.", "base": "ONCORE DE MEXICO", "municipio": "Tijuana", "servicio": "Ensamble de placas electrónicas para monitores de equipo médico.", "empleos": "600", "origen": "Estados Unidos", "certificaciones": "ISO 13485:2016, MDSAP y cumplimiento con IPC-WHMA", "direccion": "Tres Oriente 18988, Ciudad Industrial, Tijuana, BC 22444", "lat": 32.5361928, "lng": -116.9216108}, {"empresa": "(OUTSET MEDICAL) BAJA FUR, SA DE CV", "base": "BAJA FUR", "municipio": "Tijuana", "servicio": "Fabricación de máquinas para hemodiálisis", "empleos": "233", "origen": "Estados Unidos", "certificaciones": "ISO 13485, GREAT PLACE TO WORK", "direccion": "Aguila Marina, Baja Maq el Aguila, Tijuana, BC 22215", "lat": 32.4971636, "lng": -116.9054925}, {"empresa": "AG INDUSTRIES (FILTRATION GROUP).", "base": "AG INDUSTRIES", "municipio": "Tijuana", "servicio": "Fabricación de componentes de filtrado para dispositivos médicos", "empleos": "93", "origen": "Estados Unidos", "certificaciones": "ISO 13485:2016, FDA CFR820", "direccion": "Río Tijuana 3a. Etapa, Tijuana, BC 22250", "lat": 32.4409475, "lng": -116.8733656}, {"empresa": "AMPHENOL- INTEGRA BIOTECHNICAL, S.A. DE C.V.", "base": "AMPHENOL- INTEGRA BIOTECHNICAL", "municipio": "Tijuana", "servicio": "Fabricación y ensamble de productos médicos para hospitales y", "empleos": "380", "origen": "Estados Unidos", "certificaciones": "ISO 13485:2016", "direccion": "Priv. los Pinos 17030 Int. 16 y 17, Parque Industrial Los Pinos II, Tijuana, BC 22120", "lat": 32.4700209, "lng": -116.9308296}, {"empresa": "ANA DE MEXICO, S.A. DE C.V. - MEDICAL", "base": "ANA DE MEXICO - MEDICAL", "municipio": "Tijuana", "servicio": "Moldeo de plástico por inyección (proveedor especializado)", "empleos": "250", "origen": "Japón", "certificaciones": "", "direccion": "Calle Ensambladoras 180, Col. Ciudad Industrial Chilpancingo, Tijuana, BC 22444", "lat": 32.533066, "lng": -116.9175344}, {"empresa": "ANDERCRAFT DE MÉXICO, S.A. DE C.V.", "base": "ANDERCRAFT DE MEXICO", "municipio": "Mexicali", "servicio": "Fabricación de piezas de plástico por inyección (proveedor", "empleos": "75", "origen": "Estados Unidos", "certificaciones": "N/D", "direccion": "Cerrada Vía de La Producción 84, Parque Industrial Mexicali III, Mexicali, BC 21600", "lat": 32.6283165, "lng": -115.3430203}, {"empresa": "AP SERVICES DE MÉXICO - PLASTIFLEX", "base": "AP SERVICES DE MEXICO - PLASTIFLEX", "municipio": "Tijuana", "servicio": "Moldeo de plástico por inyección, ensamble de mangueras para la", "empleos": "130", "origen": "Bélgica", "certificaciones": "SO 9001, ISO 13485", "direccion": "Blvd. de los Insurgentes 20545, Parque Industrial El Florido, Tijuana, BC 22230", "lat": 32.4518674, "lng": -116.8878402}, {"empresa": "ASPEN MEDICAL PRODUCTS.", "base": "ASPEN MEDICAL PRODUCTS", "municipio": "Tijuana", "servicio": "Fabricación de productos ortopédicos", "empleos": "195", "origen": "Estados Unidos", "certificaciones": "ISO 9000", "direccion": "Boulevard Carretera Libre Antiguo Camino Tijuana 25420, Col. Fideicomiso El Florido, Tijuana, BC 22245", "lat": 32.4444853, "lng": -116.8598205}, {"empresa": "AUGEN ÓPTICOS, S.A. DE C.V.", "base": "AUGEN OPTICOS", "municipio": "Ensenada", "servicio": "Manufactura de lentes oftálmicos de resina óptica, moldes de vidrio y", "empleos": "200", "origen": "México", "certificaciones": "n/d", "direccion": "Guadalupe Silva Novelo 190, Col. El Sauzal, C.P. 22760, Ensenada, BC", "lat": 31.8989635999999, "lng": -116.6995478}, {"empresa": "AVANTTI MEDICLEAR MBP, SAPI DE C.V.", "base": "AVANTTI MEDICLEAR MBP SAPI DE CV", "municipio": "Tijuana", "servicio": "Esterilización dispositivos médicos por haz de electrones (E-Beam)", "empleos": "50", "origen": "México", "certificaciones": "ISO 11137-1, ISO 13485, ISO 9001", "direccion": "Camino Vecinal 2461, Parque Industrial FINSA Alamar, C.P. 22465, Tijuana, BC", "lat": 32.5134337, "lng": -116.9473655}, {"empresa": "AVANTTI MEDICLEAR MBP, SAPI DE C.V.", "base": "AVANTTI MEDICLEAR MBP SAPI DE CV", "municipio": "Tijuana", "servicio": "Esterilización dispositivos médicos por haz de electrones (E-Beam)", "empleos": "50", "origen": "México", "certificaciones": "ISO 11137-1, ISO 13485, ISO 9001", "direccion": "Boulevard Acapulco No. 8140, Tijuana, B.C., México.", "lat": 32.4707854, "lng": -116.9445266}, {"empresa": "BAJA FUR (DIV. VAPOTHERM)", "base": "BAJA FUR", "municipio": "Tijuana", "servicio": "Fabricación de dispositivos médicos para asistencia respiratoria.", "empleos": "165", "origen": "Estados Unidos", "certificaciones": "ISO 13485", "direccion": "Parque Industrial Pacifico IV, Tijuana, BC 22643", "lat": 32.470829, "lng": -116.9922002}, {"empresa": "BIOMERICA DE MÉXICO, S. DE R.L. DE C.V.", "base": "BIOMERICA DE MEXICO", "municipio": "Mexicali", "servicio": "Fabricación de aditamentos protésicos dentales compatibles con", "empleos": "20", "origen": "Estados Unidos", "certificaciones": "ISO 13485", "direccion": "Calle Saturno 20-A, Parque Industrial Mexicali I, Mexicali, BC 21210", "lat": 32.6692259, "lng": -115.411025}, {"empresa": "BIOTIX INTERNACIONAL, S. DE R.L. DE C.V.", "base": "BIOTIX INTERNACIONAL", "municipio": "Tijuana", "servicio": "Fabricación de insumos de plásticos para laboratorio (pipetas).", "empleos": "950", "origen": "Estados Unidos", "certificaciones": "ISO 9001", "direccion": "Privada Baja Maq. Insurgentes 19814, Parque Ind. Las Flores, Tijuana, BC 22230", "lat": 32.4624446, "lng": -116.9083632}, {"empresa": "BRADY MEXICO, S. DE R.L. DE C.V.", "base": "BRADY MEXICO", "municipio": "Tijuana", "servicio": "Fabricación de impresos de etiquetas y engomados. (Proveedor", "empleos": "950", "origen": "Estados Unidos", "certificaciones": "ISO 9001, ISO 13485", "direccion": "Guerrero Negro 2, Parque Industrial Nórdika, Tijuana, BC 22644", "lat": 32.445072, "lng": -116.9836889}, {"empresa": "BREG MÉXICO, S. DE R.L. DE C.V. (2 plantas) – Planta 1 – Palaco", "base": "BREG MEXICO", "municipio": "Mexicali", "servicio": "Ensamble de productos ortopédicos: andaderas, bastones, botas para", "empleos": "1961", "origen": "Estados Unidos", "certificaciones": "ISO 13485:2016, ISO9001, Buenas prácticas de fabricación de", "direccion": "Blvd. Venustiano Carranza 33, Parque Industrial Palaco, C.P. 21385, Mexicali, BC", "lat": 32.5908782, "lng": -115.4049163}, {"empresa": "BREG MÉXICO, S. DE R.L. DE C.V. (2 plantas) – Planta 2 – PIMSA IV", "base": "BREG MEXICO", "municipio": "Mexicali", "servicio": "Ensamble de productos ortopédicos: andaderas, bastones, botas para", "empleos": "1961", "origen": "Estados Unidos", "certificaciones": "ISO 13485:2016, ISO9001, Buenas prácticas de fabricación de", "direccion": "Círculo de la Amistad 2701, Parque Industrial PIMSA IV, C.P. 21210, Mexicali, BC", "lat": 32.6680113, "lng": -115.3978272}, {"empresa": "BRYANT RUBBER (OPTI SOURCE)", "base": "BRYANT RUBBER", "municipio": "Tijuana", "servicio": "Moldeo de componentes de hule y silicón (Proveedor especializado)", "empleos": "125", "origen": "Estados Unidos", "certificaciones": "ISO 9000,ISO 13485:2016, ISO 14001:2015, ISO/TS 16949:2009", "direccion": "Andador Vecinal 12821 Int. 5, Carretera Tijuana-Tecate, Tijuana, BC 22250", "lat": 32.4636651, "lng": -116.8123415}, {"empresa": "CALIBAJA MANUFACTURING, MEXICALI", "base": "CALIBAJA MANUFACTURING MEXICALI", "municipio": "Mexicali", "servicio": "Manufactura de productos médicos dentales y de laboratorio, así como", "empleos": "311", "origen": "Estados Unidos", "certificaciones": "Buenas prácticas de fabricación de dispositivos médicos (BPFDM)", "direccion": "Privada Circuito Siglo XXI 1190, Mexicali, BC 21254", "lat": 32.6477205, "lng": -115.4125249}, {"empresa": "CARDINAL HEALTH", "base": "CARDINAL HEALTH", "municipio": "Tijuana", "servicio": "Fabricación de material desechable médico, quirúrgico e insumos", "empleos": "2700", "origen": "Estados Unidos", "certificaciones": "ISO 13485, C-TPAT, JPAL, SOR 98, TOP EMPLOYER, ISO9001", "direccion": "Calle 9 Sur 1113, Parque Industrial Nueva Tijuana, C.P. 22444, Tijuana, BC", "lat": 32.5313415, "lng": -116.9226941}, {"empresa": "CARL ZEISS VISION MANUFACTURA DE MÉXICO", "base": "CARL ZEISS VISION MANUFACTURA DE MEXICO", "municipio": "Tijuana", "servicio": "Fabricación de lentes oftálmicos.", "empleos": "3000", "origen": "Alemania", "certificaciones": "ISO 13485:2016, ISO 9001:2015, NOM-241-SSA1-2021", "direccion": "Blvd. Insurgentes 18600, Fracc. Padre Kino, C.P. 22223, Tijuana, BC", "lat": 32.4834902, "lng": -116.9226038}, {"empresa": "CARLEY DE MEXICO, S.A. DE C.V.", "base": "CARLEY DE MEXICO", "municipio": "Mexicali", "servicio": "Manufactura de lámparas miniatura de alta intensidad para equipo", "empleos": "50", "origen": "México", "certificaciones": "", "direccion": "Avenida Mariano Arista 1282, Primera Sección, Mexicali, BC 21100", "lat": 32.6589819, "lng": -115.4710649}, {"empresa": "CENTERPIECE", "base": "CENTERPIECE", "municipio": "Tijuana", "servicio": "Esterilización de productos médicos. (Proveedor especializado)", "empleos": "35", "origen": "Estados Unidos", "certificaciones": "ISO 134, C-TPAT", "direccion": "Boulevard La Encantada, Parque Industrial El Florido, Tijuana, BC 22703", "lat": 32.4483309, "lng": -116.858291}, {"empresa": "CENTERPIECE, S.A. DE C.V.", "base": "CENTERPIECE", "municipio": "Playas De Rosarito", "servicio": "Manufactura de dispositivos médicos por contrato y servicios de", "empleos": "180", "origen": "Estados Unidos", "certificaciones": "ISO 13485, C-TPAT", "direccion": "Ave. De la Hospitalidad 505, Col. Lucio Blanco, C.P. 22706, Playas de Rosarito, BC", "lat": 32.3822572, "lng": -117.0459948}, {"empresa": "COASTLINE DE MÉXICO S.A. DE .C.V.", "base": "COASTLINE DE MEXICO", "municipio": "Tijuana", "servicio": "Ensamble de productos electrónicos y médicos.", "empleos": "233", "origen": "Estados Unidos", "certificaciones": "ISO 13485, ISO 9001 Registro FDA, Cumple con RoHS", "direccion": "Ciprés 4-5, Las Brisas Parque Industrial, Tijuana, BC 22117", "lat": 32.495324, "lng": -116.9576465}, {"empresa": "CODAN", "base": "CODAN", "municipio": "Tijuana", "servicio": "Fabricación de dispositivos médicos (jeringas orales, sistema de", "empleos": "200", "origen": "Estados Unidos", "certificaciones": "ISO 13485:2016", "direccion": "Avenida Paseo Reforma 8950, Parque Industrial La Mesa, Tijuana, BC 22180", "lat": 32.4738366, "lng": -116.9479345}, {"empresa": "CO-PRODUCTION DE TIJUANA, SA DE CV (UFP MEDTECH)", "base": "CO-PRODUCTION DE TIJUANA", "municipio": "Tijuana", "servicio": "Diseño, manufactura, ensamble y subensamble de dispositivos médicos,", "empleos": "105", "origen": "Estados Unidos", "certificaciones": "ISO13485", "direccion": "Privada Agua Azul 7004, Loma Bonita Nte., Tijuana, BC 22604", "lat": 32.4842654, "lng": -117.0496214}, {"empresa": "CO-PRODUCTION DE TIJUANA. S.A. DE C.V. (VARIAN", "base": "CO-PRODUCTION DE TIJUANA (VARIAN", "municipio": "Tijuana", "servicio": "Manufactura y ensamble de equipo para radioterapia", "empleos": "90", "origen": "Estados Unidos", "certificaciones": "ISO 13485:2016, MD 767812", "direccion": "Tomas Alva Edison 14022, Alejandro Graham Bell, Tijuana, BC 22163", "lat": 32.4202557, "lng": -116.8941764}, {"empresa": "CORZA MEDICAL SURGICAL SPECIALTIES MEXICO, S. DE", "base": "CORZA MEDICAL SURGICAL SPECIALTIES MEXICO S DE", "municipio": "Tijuana", "servicio": "Desarrollo y manufactura de instrumental quirúrgicos", "empleos": "1650", "origen": "Suiza", "certificaciones": "ISO 13485, cumplimiento con la FDA", "direccion": "Corredor Tijuana-Rosarito 2000 24702-B, Ejido Francisco Villa, Tijuana, BC 22235", "lat": 32.4979007, "lng": -116.8495481}, {"empresa": "DELA INCORPORATED DE MÉXICO", "base": "DELA INCORPORATED DE MEXICO", "municipio": "Tijuana", "servicio": "Fabricación de laminados, die cutting, slitting para productos", "empleos": "353", "origen": "Estados Unidos", "certificaciones": "ISO 9001:2015, C-TPAT,", "direccion": "Valle de los Cirios 495, Parque Industrial Valle Bonito, Tijuana, BC 22250", "lat": 32.4340309, "lng": -116.8730488}, {"empresa": "DEMANT HEALTH HEARING", "base": "DEMANT HEALTH HEARING", "municipio": "Tijuana", "servicio": "Manufactura de aparatos auditivos", "empleos": "705", "origen": "Dinamarca", "certificaciones": "n/d", "direccion": "Blvd. Corredor Tijuana-Rosarito 2000 24702, Ejido Francisco Villa, Tijuana, BC 22236", "lat": 32.5207967, "lng": -116.894785}, {"empresa": "DESICCARE MÉXICO", "base": "DESICCARE MEXICO", "municipio": "Tijuana", "servicio": "Fabricación de productos desecantes y absorbentes de oxígeno", "empleos": "500", "origen": "Estados Unidos", "certificaciones": "ISO 9001, GMP, BRC, HAACP", "direccion": "Avenida del Aguila Azteca 19190, Parque Industrial Baja Maquiladora El Aguila, Tijuana, BC 22215", "lat": 32.4953723, "lng": -116.9089489}, {"empresa": "ENSAMBLES DE CALIDAD MÉXICO S.A. DE C.V.", "base": "ENSAMBLES DE CALIDAD MEXICO", "municipio": "Tijuana", "servicio": "Ensambles de productos de prueba para análisis médicos y", "empleos": "100", "origen": "Estados Unidos / México", "certificaciones": "ISO 9001:2015", "direccion": "Camino Antiguo a Tecate 16590, Colonia Niños Héroes, Tijuana, BC 22120", "lat": 32.4746578, "lng": -116.9309114}, {"empresa": "ESSILOR TIJUANA OPTICA", "base": "ESSILOR TIJUANA OPTICA", "municipio": "Tijuana", "servicio": "Fabricación de lentes oftálmicos", "empleos": "1954", "origen": "Francia", "certificaciones": "ISO 13485, C-TPAT", "direccion": "Boulevard La Encantada, Parque Industrial El Florido, Tijuana, BC 22264", "lat": 32.4483309, "lng": -116.858291}, {"empresa": "FÁBRICA DE CUBREBOCAS DE MEXICAL", "base": "FABRICA DE CUBREBOCAS DE MEXICAL", "municipio": "Mexicali", "servicio": "Fabricación de cubrebocas desechables", "empleos": "20", "origen": "México", "certificaciones": "n/d", "direccion": "Calzada Manuel Gómez Morín SN, Mexicali, BC 21379", "lat": 32.6220149, "lng": -115.4170728}, {"empresa": "FISHER & PAYKEL HEALTHCARE (2 plantas) – Planta 1 – Pacífico", "base": "FISHER & PAYKEL HEALTHCARE", "municipio": "Tijuana", "servicio": "Fabricación de productos de cuidado respiratorio: cánulas, máscaras,", "empleos": "2400", "origen": "Nueva Zelanda", "certificaciones": "ISO 13485, Regulaciones FDA/CE", "direccion": "Ave. Todos los Santos 12831, Parque Industrial Pacífico, C.P. 22643, Tijuana, BC", "lat": 32.461186, "lng": -116.9911428}, {"empresa": "FISHER & PAYKEL HEALTHCARE (2 plantas) – Planta 2 – Prologis", "base": "FISHER & PAYKEL HEALTHCARE", "municipio": "Tijuana", "servicio": "Fabricación de productos de cuidado respiratorio: cánulas, máscaras,", "empleos": "2400", "origen": "Nueva Zelanda", "certificaciones": "ISO 13485, Regulaciones FDA/CE", "direccion": "Prologis Pacífico Industrial Park, Tijuana, BC", "lat": 32.475036, "lng": -116.9922239}, {"empresa": "FISHER & PAYKEL HEALTHCARE (2 plantas) – Planta 3 – Sánchez", "base": "FISHER & PAYKEL HEALTHCARE", "municipio": "Tijuana", "servicio": "Fabricación de productos de cuidado respiratorio: cánulas, máscaras,", "empleos": "2400", "origen": "Nueva Zelanda", "certificaciones": "ISO 13485, Regulaciones FDA/CE", "direccion": "Parque Industrial Pacífico Sección Nueva, Tijuana, BC", "lat": 32.470829, "lng": -116.9922002}, {"empresa": "FLEX", "base": "FLEX", "municipio": "Tijuana", "servicio": "Fabricación de dispositivos médicos por contrato jeringas, catéteres,", "empleos": "4300", "origen": "Estados Unidos", "certificaciones": "ISO 13485, COFEPRIS (NOM‑241): FDA / CE", "direccion": "Avenida Paseo Reforma 8950 C-1, Parque Industrial La Mesa, Tijuana, BC 22116", "lat": 32.4738366, "lng": -116.9479345}, {"empresa": "FOXCONN BAJA CALIFORNIA", "base": "FOXCONN BAJA CALIFORNIA", "municipio": "Tijuana", "servicio": "Manufactura de productos electrónicos y dispositivos médicos", "empleos": "3000", "origen": "Taiwán", "certificaciones": "ISO 13485, ISO 9001, FDA 21, QMS, Lean/ Six Sigma", "direccion": "Laguna Mainar 5520, Parque Industrial El Lago, Tijuana, BC 22210", "lat": 32.5396493, "lng": -116.9065848}, {"empresa": "GAMBRO RENAL PRODUCTS, SA DE CV (VANTIVE-", "base": "GAMBRO RENAL PRODUCTS (VANTIVE", "municipio": "Tijuana", "servicio": "Elaboración de conjunto de tubos para hemodiálisis.", "empleos": "930", "origen": "Estados Unidos", "certificaciones": "ISO 9001:2008, ISO 14001:2004, MDSAP", "direccion": "Boulevard Pacífico 10014, Parque Industrial Pacífico, Tijuana, BC 22670", "lat": 32.4559159, "lng": -116.9804581}, {"empresa": "GENETICA LABORATORIOS", "base": "GENETICA LABORATORIOS", "municipio": "Tecate", "servicio": "Elaboración de productos farmacéuticos (medicamentos genéricos)", "empleos": "100", "origen": "Estados Unidos", "certificaciones": "Buenas Prácticas de Fabricación (GMP) emitidas por COFEPRIS", "direccion": "Calle Olivo 208-B, Parque Industrial Tecate, Tecate, BC 21430", "lat": 32.5686012, "lng": -116.584948}, {"empresa": "GILERO", "base": "GILERO", "municipio": "Tijuana", "servicio": "Contract Design & Manufacturing Organization especializada en", "empleos": "18", "origen": "Estados Unidos", "certificaciones": "FDA, ISO 13485, cGMP compliant", "direccion": "Paseo de la Reforma 8950-E1, Parque Industrial Vesta, Tijuana, BC 22180", "lat": 32.4761013, "lng": -116.9556015}, {"empresa": "GLIDEWELL MÉXICO (SMITHS STERLING /PACIFIC EDGE", "base": "GLIDEWELL MEXICO (SMITHS STERLING /PACIFIC EDGE", "municipio": "Tijuana", "servicio": "Fabricación de prótesis dentales.", "empleos": "90", "origen": "Estados Unidos", "certificaciones": "Empresa Segura", "direccion": "Privada Valle de las Palmas 8451, Colonia Valle Sur, Tijuana, BC 22637", "lat": 32.4759954, "lng": -117.0305278}, {"empresa": "GREATBATCH MEDICAL CRM&N (INTEGER) 2 plantas – Planta Norte", "base": "GREATBATCH MEDICAL CRM&N 2 PLANTAS", "municipio": "Tijuana", "servicio": "Ensamble y fabricación de componentes para dispositivos médicos", "empleos": "1950", "origen": "Estados Unidos", "certificaciones": "ISO 13485, Empresa Segura, FDA, JPAL,", "direccion": "Blvd. Héctor Terán Terán 20120, Ciudad Industrial, C.P. 22444, Tijuana, BC", "lat": 32.5367233, "lng": -116.9039451}, {"empresa": "GREATBATCH MEDICAL CRM&N (INTEGER) 2 plantas – Planta Sur", "base": "GREATBATCH MEDICAL CRM&N 2 PLANTAS", "municipio": "Tijuana", "servicio": "Ensamble y fabricación de componentes para dispositivos médicos", "empleos": "1950", "origen": "Estados Unidos", "certificaciones": "ISO 13485, Empresa Segura, FDA, JPAL,", "direccion": "Calle 5 Norte 511, Ciudad Industrial, C.P. 22444, Tijuana, BC", "lat": 32.5443579, "lng": -116.9185151}, {"empresa": "H3 DE TIJUANA - HARMAC", "base": "H3 DE TIJUANA - HARMAC", "municipio": "Tijuana", "servicio": "Fabricación y ensamble de productos médicos diversos", "empleos": "500", "origen": "Estados Unidos", "certificaciones": "ISO 13485, FDA Registered, compliant con 21 CFR Part 820 y Part", "direccion": "Calle Maquiladoras 320-A, Ciudad Industrial Nueva Tijuana, Tijuana, BC 22500", "lat": 32.5349519, "lng": -116.9114918}, {"empresa": "HAEMONETICS MÉXICO MANUFACTURING", "base": "HAEMONETICS MEXICO MANUFACTURING", "municipio": "Tijuana", "servicio": "Manufactura y ensamble de bolsas para transfusión de sangre.", "empleos": "1200", "origen": "Estados Unidos", "certificaciones": "ISO 13485, FDA, CE", "direccion": "Calle Colinas 11731, Parque Industrial El Florido, Tijuana, BC 22244", "lat": 32.4542058, "lng": -116.8803396}, {"empresa": "HIGH TEK MOTOR S.A. DE C.V.", "base": "HIGH TEK MOTOR", "municipio": "Tijuana", "servicio": "Ensamble de motores de corriente alterna y directa (estatores: motores", "empleos": "100", "origen": "Estados Unidos", "certificaciones": "ISO 9001:2015", "direccion": "Carretera Tijuana-Tecate 16890, Tijuana, BC 22120", "lat": 32.5030369, "lng": -116.9494095}, {"empresa": "HONEYWELL SPS", "base": "HONEYWELL SPS", "municipio": "Tijuana", "servicio": "Manufactura de equipos de protección para personal (cubre bocas,", "empleos": "1300", "origen": "Estados Unidos", "certificaciones": "OEA, C-TPAT, ISO 9001", "direccion": "Avenida de los Insurgentes 20551, Parque Industrial El Florido, Tijuana, BC 22244", "lat": 32.4486439, "lng": -116.8865027}, {"empresa": "HUDSON RESPIRATORY CARE TECATE, S. DE R.L. DE C.V.", "base": "HUDSON RESPIRATORY CARE TECATE", "municipio": "Tecate", "servicio": "Ensamble de dispositivos de soporte respiratorio.", "empleos": "900", "origen": "Estados Unidos", "certificaciones": "ISO 13485, FDA 21 CFR Part 820, COFEPRIS", "direccion": "Calle Misión Eusebio Kino 1316, Col. El Descanso, C.P. 21478, Tecate, BC", "lat": 32.5666181, "lng": -116.6074282}, {"empresa": "ICU MEDICAL DE MÉXICO S.A. DE C.V.", "base": "ICU MEDICAL DE MEXICO", "municipio": "Ensenada", "servicio": "Ensamble de dispositivos de transfusión intravenosa (cánulas,", "empleos": "2500", "origen": "Estados Unidos", "certificaciones": "ISO 13485:200, FDA 21 CRF PART 280, COFEPRIS", "direccion": "Calle Cuarzo 250, Ejido Nacionalista de Sánchez Taboada, C.P. 22790, Ensenada, BC", "lat": 31.7112698, "lng": -116.5440282}, {"empresa": "ICU MEDICAL HEALTHCARE", "base": "ICU MEDICAL HEALTHCARE", "municipio": "Tijuana", "servicio": "Fabricación de productos médicos para procedimientos quirúrgicos", "empleos": "2500", "origen": "Estados Unidos", "certificaciones": "ISO 9000 , ISO 9001, ISO 14001, OHSAS 18001, ISO 13485,", "direccion": "Avenida Calidad 4, Parque Industrial Finsa, Tijuana, BC 22425", "lat": 32.5289771, "lng": -116.9672221}, {"empresa": "INDUSTRIAS SL, S.A. DE C.V.", "base": "INDUSTRIAS SL", "municipio": "Mexicali", "servicio": "Ensamble electrónico de fuentes de poder para equipo médico", "empleos": "790", "origen": "Estados Unidos", "certificaciones": "ISO 9000, AS9100, ISO 13485:2016,", "direccion": "Calle Siglo XXI 2055, CPA Business Center, Mexicali, BC 21254", "lat": 32.6432763, "lng": -115.4064719}, {"empresa": "INTUITIVE SURGICAL, S. DE R.L. DE C.V.", "base": "INTUITIVE SURGICAL", "municipio": "Mexicali", "servicio": "Fabricación y ensamble de instrumentos médicos: Robots quirúrgicos", "empleos": "690", "origen": "Estados Unidos", "certificaciones": "", "direccion": "Circuito Internacional Norte 8, Col. Nelson, C.P. 21395, Mexicali, BC", "lat": 32.5857555, "lng": -115.3789142}, {"empresa": "JABIL HEALTHCARE - NPA DE MÉXICO, S DE R.L. DE C.V. 3 – Planta 1 – Otay", "base": "JABIL HEALTHCARE - NPA DE MEXICO 3", "municipio": "Tijuana", "servicio": "Ensamble de productos médicos / plásticos", "empleos": "4985", "origen": "Estados Unidos", "certificaciones": "ISO 13485:2016 e ISO 9001:2015", "direccion": "Sor Juana Inés de la Cruz 20150-5, Cd. Industrial Otay, C.P. 22444, Tijuana, BC", "lat": 32.5501123, "lng": -116.9182006}, {"empresa": "JABIL HEALTHCARE - NPA DE MÉXICO, S DE R.L. DE C.V. 3 – Planta 2 – Murua", "base": "JABIL HEALTHCARE - NPA DE MEXICO 3", "municipio": "Tijuana", "servicio": "Ensamble de productos médicos / plásticos", "empleos": "4985", "origen": "Estados Unidos", "certificaciones": "ISO 13485:2016 e ISO 9001:2015", "direccion": "Blvd. Héctor Terán Terán 20662-C, Col. Murua Oriente, C.P. 22465, Tijuana, BC", "lat": 32.5249335, "lng": -116.8976564}, {"empresa": "JABIL HEALTHCARE - NPA DE MÉXICO, S DE R.L. DE C.V. 3 – Planta 3 – Vecinal", "base": "JABIL HEALTHCARE - NPA DE MEXICO 3", "municipio": "Tijuana", "servicio": "Ensamble de productos médicos / plásticos", "empleos": "4985", "origen": "Estados Unidos", "certificaciones": "ISO 13485:2016 e ISO 9001:2015", "direccion": "Camino Vecinal 20652, Col. Murua Oriente, C.P. 22465, Tijuana, BC", "lat": 32.512105, "lng": -116.9575894}, {"empresa": "LABOMEX MBP (THERMO FISHER).", "base": "LABOMEX MBP", "municipio": "Tijuana", "servicio": "Ensamble de productos para laboratorio", "empleos": "986", "origen": "Estados Unidos", "certificaciones": "ISO 9001, ISO 13485, C-TPAT", "direccion": "Avenida Braulio Maldonado 6470, Colonia El Rubí, Tijuana, BC 22626", "lat": 32.4857871, "lng": -117.0354847}, {"empresa": "LABORATORIOS BAJA MED S.A. DE C.V.", "base": "LABORATORIOS BAJA MED", "municipio": "Tijuana", "servicio": "Producción y formulación de medicamentos y productos farmacéuticos", "empleos": "50", "origen": "México", "certificaciones": "COFEPRIS, NOM", "direccion": "Esteban Cantú 6620, Col. El Rubí, Tijuana, BC", "lat": 32.4824048, "lng": -117.0365856}, {"empresa": "LABORATORIOS SCANTIBODIES", "base": "LABORATORIOS SCANTIBODIES", "municipio": "Tecate", "servicio": "Manufactura de dispositivos para diagnóstico médico (Fabricación:", "empleos": "400", "origen": "Estados Unidos", "certificaciones": "", "direccion": "Calle Los Viñedos 4100, Parque Industrial El Bajío, C.P. 21430, Tecate, BC", "lat": 32.563609, "lng": -116.6256752}, {"empresa": "LANCER ORTHODONTICS", "base": "LANCER ORTHODONTICS", "municipio": "Mexicali", "servicio": "Fabricación de frenos dentales de acero inoxidable, anillos de metal y", "empleos": "50", "origen": "Estados Unidos", "certificaciones": "NOM‑241‑SSA‑2012, ISO 13485, ISO 9001, FDA, CE Mark", "direccion": "Calz. Saturno / Ave. República de Argentina 20, PIMSA I, C.P. 21210, Mexicali, BC", "lat": 32.6671981, "lng": -115.4518155}, {"empresa": "MAMMOTOME (DEVICOR MEDICAL PRODUCTS DE", "base": "MAMMOTOME (DEVICOR MEDICAL PRODUCTS DE", "municipio": "Tijuana", "servicio": "Ensamble de productos médicos, procesamiento de consumibles", "empleos": "320", "origen": "Estados Unidos", "certificaciones": "ISO 13485 / NOM‑241‑SSA1‑2021", "direccion": "Calle Sor Juana Inés de la Cruz 20152, Col. Chilpancingo, C.P. 22440, Tijuana, BC", "lat": 32.5511142, "lng": -116.915792}, {"empresa": "MANUFACTURA INTEGRADA DEL PACÍFICO", "base": "MANUFACTURA INTEGRADA DEL PACIFICO", "municipio": "Tijuana", "servicio": "Ensamble médico (pipetas de plástico para laboratorio).", "empleos": "222", "origen": "Estados Unidos", "certificaciones": "ISO 13485, FDA, QMS (21 CFR 820)", "direccion": "Prolongación Calle M Juárez 1089-1, Lindavista, Tijuana, BC 22054", "lat": 32.5307822, "lng": -117.0586935}, {"empresa": "MAQ-OPS (DIV. SHAWMUT)", "base": "MAQ-OPS", "municipio": "Tijuana", "servicio": "Fabricación de productos médicos (ortopédicos)", "empleos": "60", "origen": "Estados Unidos", "certificaciones": "ISO 9001", "direccion": "Héctor Terán Terán 1002, Colonia Cañón del Padre, Tijuana, BC 22203", "lat": 32.519745, "lng": -116.8896197}, {"empresa": "MARTECH MEDICAL PRODUCTS, S. DE R.L. DE C.V.", "base": "MARTECH MEDICAL PRODUCTS", "municipio": "Mexicali", "servicio": "Fabricación de productos médicos (catéteres para diálisis y de cirugía)", "empleos": "1700", "origen": "Estados Unidos", "certificaciones": "", "direccion": "Calle Mercurio 46, Parque Industrial PIMSA I, C.P. 21210, Mexicali, BC", "lat": 32.6677379, "lng": -115.4157415}, {"empresa": "MASIMO MEXICO, S. DE R.L. DE C.V. (2 plantas) – Planta 1", "base": "MASIMO MEXICO", "municipio": "Mexicali", "servicio": "Fabricación de sensores para oxigenación.", "empleos": "3477", "origen": "Estados Unidos", "certificaciones": "Registro FDA, ISO 13485 / ISO 9001: Cumple con cGMP, EU-UE y", "direccion": "Calzada del Oro 2001 Modulo-6, Mexicali, BC", "lat": 32.5886217, "lng": -115.4040262}, {"empresa": "MASIMO MEXICO, S. DE R.L. DE C.V. (2 plantas) – Planta 2", "base": "MASIMO MEXICO", "municipio": "Mexicali", "servicio": "Fabricación de sensores para oxigenación.", "empleos": "3477", "origen": "Estados Unidos", "certificaciones": "Registro FDA, ISO 13485 / ISO 9001: Cumple con cGMP, EU-UE y", "direccion": "Calzada del Oro 2001 Int. 5, Palaco Industrial Park, C.P. 21600, Mexicali, BC", "lat": 32.5866807, "lng": -115.4044923}, {"empresa": "MEDTRONIC (4 plantas) – Planta 1 – Libramiento A", "base": "MEDTRONIC", "municipio": "Tijuana", "servicio": "Manufactura de catéteres para uso médico vascular, kits de perfusión y", "empleos": "9500", "origen": "Estados Unidos", "certificaciones": "ISO 13485, ISO 9001, ISO 14001, IATF 16949, NOM-241-SSA1-", "direccion": "Av. de los Insurgentes 34, Libramiento, C.P. 22226, Tijuana, BC", "lat": 32.4784817, "lng": -116.922678}, {"empresa": "MEDTRONIC (4 plantas) – Planta 2 – Libramiento B", "base": "MEDTRONIC", "municipio": "Tijuana", "servicio": "Manufactura de catéteres para uso médico vascular, kits de perfusión y", "empleos": "9500", "origen": "Estados Unidos", "certificaciones": "ISO 13485, ISO 9001, ISO 14001, IATF 16949, NOM-241-SSA1-", "direccion": "Av. de los Insurgentes 37, Libramiento, C.P. 22225, Tijuana, BC", "lat": 32.4803623, "lng": -116.9216174}, {"empresa": "MEDTRONIC (4 plantas) – Planta 3 – El Lago", "base": "MEDTRONIC", "municipio": "Tijuana", "servicio": "Manufactura de catéteres para uso médico vascular, kits de perfusión y", "empleos": "9500", "origen": "Estados Unidos", "certificaciones": "ISO 13485, ISO 9001, ISO 14001, IATF 16949, NOM-241-SSA1-", "direccion": "Av. Paseo Cucapah 10510, El Lago, C.P. 22210, Tijuana, BC", "lat": 32.5045963, "lng": -116.9260565}, {"empresa": "MEDTRONIC (4 plantas) – Planta 4 – Otay", "base": "MEDTRONIC", "municipio": "Tijuana", "servicio": "Manufactura de catéteres para uso médico vascular, kits de perfusión y", "empleos": "9500", "origen": "Estados Unidos", "certificaciones": "ISO 13485, ISO 9001, ISO 14001, IATF 16949, NOM-241-SSA1-", "direccion": "Calle 9 Sur, Ciudad Industrial Nueva Tijuana, Tijuana, BC", "lat": 32.5316609, "lng": -116.9135641}, {"empresa": "MERIT MEDICAL", "base": "MERIT MEDICAL", "municipio": "Tijuana", "servicio": "Productos incluyen dispositivos de inflado, catéteres terapéuticos,", "empleos": "2100", "origen": "Estados Unidos", "certificaciones": "ISO 13485", "direccion": "Av. Sor Juana Inés de la Cruz 19970, Cumbres del Sol, Tijuana, BC 22630", "lat": 32.4285853, "lng": -117.0454601}, {"empresa": "MIRACO INC. (IVEMSA, S.A DE C.V.)", "base": "MIRACO INC", "municipio": "Tijuana", "servicio": "Ensamble y soldadura de cable eléctrico para producto médico", "empleos": "15", "origen": "Estados Unidos", "certificaciones": "n/d", "direccion": "Misión de San Javier 10643, Zona Rio, Tijuana, BC 22010", "lat": 32.5214616, "lng": -117.0078509}, {"empresa": "NEXTPHASE MEDICAL DEVICES (antes: PHASE 2 MEDICAL)", "base": "NEXTPHASE MEDICAL DEVICES", "municipio": "Tijuana", "servicio": "Fabricación de dispositivos médicos desechables (diagnóstico y", "empleos": "65", "origen": "Estados Unidos", "certificaciones": "ISO 13485, FDA", "direccion": "Zona Cerril General 14301, Parque Industrial Tomas Alva Edison, Tijuana, BC 22330", "lat": 32.5078557, "lng": -116.7960484}, {"empresa": "NORDSON MEDICAL", "base": "NORDSON MEDICAL", "municipio": "Tecate", "servicio": "Fabricación de dispositivos médicos para uso en gestión de fluidos e", "empleos": "105", "origen": "Estados Unidos", "certificaciones": "ISO 13485", "direccion": "Los Olivos 6500 Int-1D, Rancho El Bajío, Tecate, BC 21452", "lat": 32.5227546, "lng": -116.6916664}, {"empresa": "NORTH SAFETY DE MEXCIALI, S. DE R.L. DE C.V.", "base": "NORTH SAFETY DE MEXCIALI", "municipio": "Mexicali", "servicio": "Manufactura y ensamble de productos de seguridad industrial / salud", "empleos": "500", "origen": "Estados Unidos", "certificaciones": "n/d", "direccion": "Calle Electra 1099, Mexicali, BC 21385", "lat": 32.6042523, "lng": -115.4343892}, {"empresa": "NOVEM MEDICAL", "base": "NOVEM MEDICAL", "municipio": "Tijuana", "servicio": "Medical contract manufacturing de ensamble médico y retrabajos de", "empleos": "100", "origen": "Estados Unidos", "certificaciones": "ISO 13485:2016, FDA QSR 21 CFR 820, ISO 14644:2015", "direccion": "Calle Amapolas 65, Col. Libramiento, Tijuana, BC 22225", "lat": 32.4623908, "lng": -116.9141758}, {"empresa": "NUCLEUS PLASTICS", "base": "NUCLEUS PLASTICS", "municipio": "Tijuana", "servicio": "Inyección de plástico por moldeo y sub ensamble médico. (Proveedor", "empleos": "51", "origen": "México", "certificaciones": "ISO 13485, 21 CFR 820, y estándares de salas limpias ISO 7/8", "direccion": "Elota 3684 Int 3, Colonia Campestre Murua Martinez, Tijuana, BC 22455", "lat": 32.5219352, "lng": -116.9281591}, {"empresa": "OCP DE MÉXICO", "base": "OCP DE MEXICO", "municipio": "Tijuana", "servicio": "Ensamble de cables y arneses para productos médicos y electrónicos.", "empleos": "73", "origen": "Estados Unidos", "certificaciones": "ISO 9001:2015, ISO 13485:2016", "direccion": "Privada La Palma 16680 Int. 28-A, Parque Industrial Los Pinos, Tijuana, BC 22120", "lat": 32.4700209, "lng": -116.9308296}, {"empresa": "ODU MÉXICO MANUFACTURING", "base": "ODU MEXICO MANUFACTURING", "municipio": "Tijuana", "servicio": "Manufactura de conectores y arneses. (Proveedor especializado)", "empleos": "390", "origen": "Alemania", "certificaciones": "ISO9001", "direccion": "Valle de los Cirios 12821 Int 5, Parque Industrial El Realito, Tijuana, BC 22225", "lat": 32.4389993, "lng": -116.8704207}, {"empresa": "ORTHODENTAL, S.A. DE C.V. (DENTSPLY SIRONA)", "base": "ORTHODENTAL", "municipio": "Mexicali", "servicio": "Fabricación de alineadores dentales", "empleos": "470", "origen": "Estados Unidos", "certificaciones": "", "direccion": "Calle Industria del Acero 18, Parque Industrial El Vigía, Mexicali, BC 21397", "lat": 32.5962777, "lng": -115.4041691}, {"empresa": "ORTOTEC DE B.C. S.A. DE C.V.", "base": "ORTOTEC DE BC", "municipio": "Tecate", "servicio": "Fabricación de piezas de ortodoncia.", "empleos": "100", "origen": "México", "certificaciones": "n/d", "direccion": "Av. Benito Juárez 751, El Refugio, Tecate, BC 21440", "lat": 32.5673133, "lng": -116.650614}, {"empresa": "OSSUR MÉXICO, S DE RL DE CV", "base": "OSSUR MEXICO", "municipio": "Tijuana", "servicio": "Fabricación de productos ortopédicos y protésicos no electrónicos,", "empleos": "374", "origen": "Islandia", "certificaciones": "ISO 13485, ISO 14000, C-TPAT, EMPRESA SEGURA", "direccion": "Blvd. Hector Teran Teran 2102, Col. Cañon del Padre, Tijuana, BC 22206", "lat": 32.526199, "lng": -116.8980119}, {"empresa": "PARKER INDUSTRIAL, S DE RL DE CV (DIVISION MEDICA", "base": "PARKER INDUSTRIAL (DIVISION MEDICA", "municipio": "Tijuana", "servicio": "Fabricación de productos médicos de uso quirúrgico.", "empleos": "400", "origen": "Estados Unidos", "certificaciones": "ISO 13485, ISO 14001, IATF 16949", "direccion": "Calle 7 Norte 111, Ciudad Industrial Chilpancingo, Tijuana, BC 22444", "lat": 32.5408655, "lng": -116.918594}, {"empresa": "PLASTICUS, S.A. DE C.V. (TECHNIMARK MEXICALI)", "base": "PLASTICUS", "municipio": "Mexicali", "servicio": "Fabricación de productos plásticos mediante moldeo por inyección.", "empleos": "", "origen": "Estados Unidos", "certificaciones": "N/D", "direccion": "Calle Circuito del Desierto 64, Parque Industrial del Desierto, Mexicali, BC 21395", "lat": 32.5863697, "lng": -115.3806694}, {"empresa": "POLIMEROS FORMULA DE TECATE, S.A. DE C.V.", "base": "POLIMEROS FORMULA DE TECATE", "municipio": "Tecate", "servicio": "Manufactura de componentes plásticos (especialización médica en una", "empleos": "450", "origen": "Estados Unidos", "certificaciones": "ISO 13485:2016, ISO 9001, Registro FDA, certificación cuarto limpio", "direccion": "Calle Guaycura 106, Paraíso, Tecate, BC 21485", "lat": 32.5574351, "lng": -116.6401418}, {"empresa": "POSEY, S DE R.L. DE C.V.", "base": "POSEY", "municipio": "Tijuana", "servicio": "Manufactura de equipo hospitalario (guantes, protectores bucales,", "empleos": "2100", "origen": "Estados Unidos", "certificaciones": "ISO 13485", "direccion": "Av. Ferrocarril 16901 Bod. 64, Río Tijuana 3a. Etapa, Tijuana, BC 22226", "lat": 32.4805933, "lng": -116.9367214}, {"empresa": "PRENT BAJA, S. DE R.L. DE C.V.", "base": "PRENT BAJA", "municipio": "Playas De Rosarito", "servicio": "Termoformado (procesamiento plástico) para productos médicos.", "empleos": "50", "origen": "Estados Unidos", "certificaciones": "ISO 13485", "direccion": "Blvd. Sereno 91104, Col. Amp. Lucio Blanco, C.P. 22706, Playas de Rosarito, BC", "lat": 32.3850461, "lng": -117.0454031}, {"empresa": "PRINTPACK MEDICAL", "base": "PRINTPACK MEDICAL", "municipio": "Tijuana", "servicio": "Fabricación de bolsas de plástico para la industria médica (Proveedor", "empleos": "50", "origen": "Estados Unidos", "certificaciones": "ISO9001", "direccion": "Parque Industrial El Florido II, Tijuana, BC 22244", "lat": 32.4544427, "lng": -116.8660032}, {"empresa": "PRODUCTOS MEDLINE MEXICALI, S.A. DE R.L. DE C.V.", "base": "PRODUCTOS MEDLINE MEXICALI SA DE RL DE CV", "municipio": "Mexicali", "servicio": "Fabricación de consumibles médicos plásticos de un solo uso mediante", "empleos": "690", "origen": "Estados Unidos", "certificaciones": "Industria limpia, ISO 13485, Great Place to Work (2024)", "direccion": "Avenida Circuito del Desierto 71 A, Parque Industrial el Desierto, Mexicali, BC 21395", "lat": 32.5863697, "lng": -115.3806694}, {"empresa": "PRODUCTOS UROLOGOS DE MEXICO, S.A. DE C.V.", "base": "PRODUCTOS UROLOGOS DE MEXICO", "municipio": "Mexicali", "servicio": "Fabricación de productos médicos respiratorios y accesorios médicos", "empleos": "1780", "origen": "Estados Unidos", "certificaciones": "", "direccion": "Avenida Huiquiño 85, Parque Industrial PIMSA III, Mexicali, BC 21397", "lat": 32.5810713, "lng": -115.3777914}, {"empresa": "SBL PHARMACEUTICALS, S. DE R.L. DE C.V.", "base": "SBL PHARMACEUTICALS", "municipio": "Tijuana", "servicio": "Manufactura de medicinas para consumo humano.", "empleos": "", "origen": "México", "certificaciones": "ISO 9001:2015, certificación conforme a la normativa mexicana", "direccion": "Puerto Escondido 23800-A, Parque Industrial Pacífico III, Tijuana, BC 22643", "lat": 32.4535615, "lng": -116.9886006}, {"empresa": "SDS DE MEXICO, S.A. DE C.V. (ENVISTA) 2 PLANTAS – Planta 1", "base": "SDS DE MEXICO 2 PLANTAS", "municipio": "Mexicali", "servicio": "Fabricación de instrumentos médicos dentales", "empleos": "3000", "origen": "Estados Unidos", "certificaciones": "FDA CFR 21parte 820, ISO 13485, CE Marking", "direccion": "Circuito Norte 31, Parque Industrial Nelson, C.P. 21395, Mexicali, BC", "lat": 32.6249284, "lng": -115.4435754}, {"empresa": "SDS DE MEXICO, S.A. DE C.V. (ENVISTA) 2 PLANTAS – Planta 2", "base": "SDS DE MEXICO 2 PLANTAS", "municipio": "Mexicali", "servicio": "Fabricación de instrumentos médicos dentales", "empleos": "3000", "origen": "Estados Unidos", "certificaciones": "FDA CFR 21parte 820, ISO 13485, CE Marking", "direccion": "Circuito Sur 31, Parque Industrial Nelson, C.P. 21395, Mexicali, BC", "lat": 32.5864133, "lng": -115.3815078}, {"empresa": "SMITHS CONEXION DE MÉXICO, S.A. DE C.V.", "base": "SMITHS CONEXION DE MEXICO", "municipio": "Tijuana", "servicio": "Fabricación de conectores eléctricos. (Proveedor especializado)", "empleos": "800", "origen": "Reino Unido", "certificaciones": "ISO 13485, ISO 9001", "direccion": "Boulevard La Encantada 20221, El Florido Seccion La Encantada, Tijuana, BC 22244", "lat": 32.4525246, "lng": -116.8829363}, {"empresa": "SONOVA SHARED SERVICES, S.A. DE C.V.", "base": "SONOVA SHARED SERVICES", "municipio": "Mexicali", "servicio": "Fabricación de implementos auditivos.", "empleos": "800", "origen": "Suiza", "certificaciones": "ISO 13485", "direccion": "Ave. Riba 825, Parque Industrial Condesa, C.P. 21395, Mexicali, BC", "lat": 32.5845936, "lng": -115.3427202}, {"empresa": "SOUTHWEST FABRICATORS, S DE R.L. DE C.V.", "base": "SOUTHWEST FABRICATORS", "municipio": "Tijuana", "servicio": "Fabricación de productos de metal para la industria médica y general", "empleos": "102", "origen": "Estados Unidos", "certificaciones": "ISO9001", "direccion": "11 Norte 650, Ciudad Industrial, Tijuana, BC 22444", "lat": 32.5428183, "lng": -116.9095261}, {"empresa": "SPECTRUM OLASTICS GROUP OPERACIONES, S. DE R.L.", "base": "SPECTRUM OLASTICS GROUP OPERACIONES S DE RL", "municipio": "Mexicali", "servicio": "Extrusión de plástico médico e industrial (catéteres, balones médicos y", "empleos": "220", "origen": "Estados Unidos", "certificaciones": "ISO 13485, ISO 9001, ISO 14001", "direccion": "Circuito de las Misiones Este 161, Parque Industrial Las Californias, C.P. 21394, Mexicali, BC", "lat": 32.6024517, "lng": -115.4195512}, {"empresa": "STRYKER TIJUANA OPERATIONS, S. DE R.L. DE C.V.", "base": "STRYKER TIJUANA OPERATIONS", "municipio": "Tijuana", "servicio": "Fabricación de dispositivos médicos, incluyendo instrumentos", "empleos": "1900", "origen": "Estados Unidos", "certificaciones": "ISO 13485, FDA", "direccion": "Blvd. Federico Benítez López 15334-7 y 8, C.P. 22115, Tijuana, BC", "lat": 32.4953679, "lng": -116.9492704}, {"empresa": "SUNRISE MEDICAL TECNOLOGÍAS, S.A. DE C.V .", "base": "SUNRISE MEDICAL TECNOLOGIAS", "municipio": "Tijuana", "servicio": "Fabricación de sillas de ruedas manuales y eléctrica, scooters eléctricos,", "empleos": "556", "origen": "Estados Unidos", "certificaciones": "ISO 13485, ISO 14001", "direccion": "Privada Misiones 110, Parque Industrial Misiones de las Californias, Tijuana, BC 22425", "lat": 32.5179644, "lng": -116.9648873}, {"empresa": "SYNTECH DE BAJA CALIFORNIA, S. DE R.L. DE C.V.", "base": "SYNTECH DE BAJA CALIFORNIA", "municipio": "Tijuana", "servicio": "Fabricación de batas desechables para cirugías, cubiertas desechables,", "empleos": "70", "origen": "Estados Unidos", "certificaciones": "ISO 13485", "direccion": "Av. Las Brisas 1200, Tijuana, BC", "lat": 32.4947687, "lng": -116.9572978}, {"empresa": "TRI-STATE DE MÉXICO, S. DE R.L. DE C.V. (MEDLINE)", "base": "TRI-STATE DE MEXICO", "municipio": "Mexicali", "servicio": "Ensamble y empaquetado de productos médicos desechables (catéteres", "empleos": "1200", "origen": "Estados Unidos", "certificaciones": "FDA, NOM‑241, ISO 13485/900113485, Empresa Segura, NEEC,", "direccion": "Ciudad de Mexicali 301, Desarrollo Industrial El Colorado, Mexicali, BC 21397", "lat": 32.5965659, "lng": -115.4015301}, {"empresa": "TUTAMEN MÉXICO, S. DE R.L. DE C.V.", "base": "TUTAMEN MEXICO", "municipio": "Tijuana", "servicio": "Manufactura por contrato, moldeo por inyección de plástico.", "empleos": "100", "origen": "Estados Unidos", "certificaciones": "ISO 13485, ISO 9001, IATF 16949", "direccion": "Calle 9 Sur 101, Ciudad Industrial, Tijuana, BC 22444", "lat": 32.5370319, "lng": -116.9215049}, {"empresa": "VIANT MEXICANA DE SERVICIOS, S. DE R.L. DE C.V.", "base": "VIANT MEXICANA DE SERVICIOS", "municipio": "Tijuana", "servicio": "Inyección de plástico por moldeo y ensamble de productos médicos", "empleos": "300", "origen": "Estados Unidos", "certificaciones": "ISO 13485", "direccion": "Blvd. La Cúspide 1, Parque Ind. Tecnomex, Col. Lázaro Cárdenas, C.P. 22500, Tijuana, BC", "lat": 32.5244051, "lng": -117.102828}, {"empresa": "VICTORY ENTERPRISES, S.A. DE C.V.", "base": "VICTORY ENTERPRISES", "municipio": "Tijuana", "servicio": "Laboratorio de medicamentos y productos biológicos", "empleos": "94", "origen": "México", "certificaciones": "Buenas Prácticas de Fabricación (BPF) certificada por COFEPRIS", "direccion": "Carr. a Ensenada km 12.5, Col. la Gloria, Tijuana, BC 22645", "lat": 32.4414558, "lng": -116.9999716}, {"empresa": "WESTMED DE MEXICO, S.A. DE C.V.", "base": "WESTMED DE MEXICO", "municipio": "Tecate", "servicio": "Fabricación y ensamble de dispositivos médicos desechables para", "empleos": "300", "origen": "Estados Unidos", "certificaciones": "ISO 13485, registro FDA", "direccion": "Calle Olivo 100, Parque Industrial Tecate, Tecate, BC 21432", "lat": 32.5686012, "lng": -116.584948}, {"empresa": "WS AUDIOLOGY MEXICO, S.A. DE C.V.", "base": "WS AUDIOLOGY MEXICO", "municipio": "Tijuana", "servicio": "Fabricación de aparatos auditivos", "empleos": "550", "origen": "Dinamarca", "certificaciones": "ISO 13485", "direccion": "Calle Todos Los Santos 9201, Pacifico y Santa Rosa, Tijuana, BC 22644", "lat": 32.4585542, "lng": -116.9836906}, {"empresa": "ZEFFER RESEARCH & ASSOC. SA DE C.V.", "base": "ZEFFER RESEARCH & ASSOC", "municipio": "Ensenada", "servicio": "Fabricación y ensamble de aparatos ortopédicos (fajas, férulas, sillas de", "empleos": "60", "origen": "Estados Unidos", "certificaciones": "ISO 13485:200, FDA 21 CRF PART 280, COFEPRIS", "direccion": "Cuarzo Mza 25 Lote 7 Y 8, Maneadero, Ensenada, BC 22790", "lat": 31.7151989, "lng": -116.571388}];
+
+const COL={Tijuana:'#2563eb',Mexicali:'#16a34a',Ensenada:'#d97706','Playas De Rosarito':'#9333ea',Tecate:'#dc2626'};
+const BGE={Tijuana:'btj',Mexicali:'bmx',Ensenada:'ben','Playas De Rosarito':'bro',Tecate:'bte'};
+
+const map=L.map('map',{zoomControl:true}).setView([32.52,-116.9],9);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+  attribution:'© OpenStreetMap © CartoDB',subdomains:'abcd',maxZoom:19
+}).addTo(map);
+
+const svgEl=document.getElementById('svgLayer');
+const lblEl=document.getElementById('lblLayer');
+
+let activeItem=null;
+
+// ── Card ─────────────────────────────────────────────────────────
+function openCard(it){
+  activeItem=it;
+  document.getElementById('ficha-nombre').textContent=it.empresa;
+  const mEl=document.getElementById('ficha-muni');
+  mEl.textContent=it.municipio;
+  mEl.className=BGE[it.municipio]||'btj';
+  document.getElementById('fc-serv').textContent=it.servicio||'N/D';
+  document.getElementById('fc-emp').textContent=it.empleos?it.empleos+' empleados':'N/D';
+  document.getElementById('fc-ori').textContent=it.origen||'N/D';
+  document.getElementById('fc-cert').textContent=(it.certificaciones||'N/D');
+  document.getElementById('fc-dir').textContent=it.direccion||'N/D';
+  document.getElementById('ficha').classList.add('open');
+}
+function closeCard(){
+  document.getElementById('ficha').classList.remove('open');
+  activeItem=null;
+}
+function openMaps(){
+  if(!activeItem) return;
+  const q=encodeURIComponent(activeItem.direccion||activeItem.empresa+' Tijuana BC');
+  window.open('https://www.google.com/maps/search/?api=1&query='+q,'_blank');
+}
+
+// ── Build items ──────────────────────────────────────────────────
+let items=DATA.map(d=>{
+  const color=COL[d.municipio]||'#64748b';
+  const short=(d.base||d.empresa).replace(/[,(].*/,'').trim().substring(0,32);
+  const cm=L.circleMarker([d.lat,d.lng],{
+    radius:5,color:'#fff',weight:1.8,fillColor:color,fillOpacity:1
+  }).addTo(map);
+  cm.on('click',()=>openCard({...d,color}));
+  return {...d,color,short,cm,vis:true};
+});
+
+// ── Canvas text measure ──────────────────────────────────────────
+const _cv=document.createElement('canvas');
+const _cx=_cv.getContext('2d');
+_cx.font='600 10px Segoe UI,sans-serif';
+function tw(s){return _cx.measureText(s).width+14}
+const LH=16;
+
+// ── Force solver ─────────────────────────────────────────────────
+function forceSolve(pts){
+  pts.forEach(p=>{p.lw=tw(p.short);p.lx=p.px+12;p.ly=p.py;p.vx=0;p.vy=0});
+  const ITER=200,REPEL=380,ANCHOR=0.045,DAMP=0.52;
+  for(let i=0;i<ITER;i++){
+    pts.forEach(p=>{p.fx=0;p.fy=0});
+    for(let a=0;a<pts.length;a++){
+      for(let b=a+1;b<pts.length;b++){
+        const A=pts[a],B=pts[b];
+        const ox=Math.min(A.lx+A.lw,B.lx+B.lw)-Math.max(A.lx,B.lx);
+        const oy=Math.min(A.ly+LH/2,B.ly+LH/2)-Math.max(A.ly-LH/2,B.ly-LH/2);
+        if(ox>0&&oy>0){
+          const cx=(A.lx+A.lw/2)-(B.lx+B.lw/2);
+          const cy=A.ly-B.ly;
+          const len=Math.max(Math.hypot(cx,cy),.1);
+          const f=REPEL*(ox*oy)/((A.lw+B.lw)*(LH*2)+1);
+          A.fx+=cx/len*f;A.fy+=cy/len*f;
+          B.fx-=cx/len*f;B.fy-=cy/len*f;
+        }
+      }
+    }
+    // dot repulsion
+    pts.forEach(p=>{
+      pts.forEach(b=>{
+        const dx=p.lx+p.lw/2-b.px,dy=p.ly-b.py;
+        const d2=dx*dx+dy*dy+.1;
+        if(d2<700){const f=REPEL*.22/d2;p.fx+=dx*f;p.fy+=dy*f}
+      });
+    });
+    // spring to anchor
+    pts.forEach(p=>{
+      const pull=ANCHOR*(1+i/ITER*.5);
+      p.fx+=(p.px+12-p.lx)*pull;
+      p.fy+=(p.py-p.ly)*pull;
+    });
+    pts.forEach(p=>{p.vx=(p.vx+p.fx)*DAMP;p.vy=(p.vy+p.fy)*DAMP;p.lx+=p.vx;p.ly+=p.vy});
+  }
+}
+
+// ── Opacity: only dim if heavily overlapping (>60%), min 0.72 ────
+function setOpacity(pts){
+  pts.forEach(p=>p.alpha=1.0);
+  for(let a=0;a<pts.length;a++){
+    for(let b=a+1;b<pts.length;b++){
+      const A=pts[a],B=pts[b];
+      const ox=Math.min(A.lx+A.lw,B.lx+B.lw)-Math.max(A.lx,B.lx);
+      const oy=Math.min(A.ly+LH/2,B.ly+LH/2)-Math.max(A.ly-LH/2,B.ly-LH/2);
+      if(ox>0&&oy>0){
+        const ratio=(ox*oy)/(Math.min(A.lw,B.lw)*LH);
+        if(ratio>.35){
+          const dim=Math.max(0.72,1-ratio*.6);  // never below 0.72
+          if(A.lw<=B.lw) A.alpha=Math.min(A.alpha,dim);
+          else            B.alpha=Math.min(B.alpha,dim);
+        }
+      }
+    }
+  }
+}
+
+// ── Draw ─────────────────────────────────────────────────────────
+function redraw(){
+  svgEl.innerHTML='';
+  lblEl.innerHTML='';
+  if(!document.getElementById('chkL').checked) return;
+  const showC=document.getElementById('chkC').checked;
+
+  const sz=map.getSize();
+  const pad=80;
+  const pts=items.filter(it=>{
+    if(!it.vis) return false;
+    const p=map.latLngToContainerPoint([it.lat,it.lng]);
+    return p.x>-pad&&p.x<sz.x+pad&&p.y>-pad&&p.y<sz.y+pad;
+  }).map(it=>{
+    const p=map.latLngToContainerPoint([it.lat,it.lng]);
+    return {...it,px:p.x,py:p.y};
+  });
+
+  forceSolve(pts);
+  setOpacity(pts);
+
+  pts.forEach(p=>{
+    if(showC){
+      const dist=Math.hypot(p.lx-p.px,p.ly-p.py);
+      if(dist>8){
+        const ln=document.createElementNS('http://www.w3.org/2000/svg','line');
+        ln.setAttribute('x1',p.px);ln.setAttribute('y1',p.py);
+        ln.setAttribute('x2',p.lx);ln.setAttribute('y2',p.ly);
+        ln.setAttribute('stroke',p.color);
+        ln.setAttribute('stroke-width','0.9');
+        ln.setAttribute('opacity','0.55');
+        svgEl.appendChild(ln);
+        const c=document.createElementNS('http://www.w3.org/2000/svg','circle');
+        c.setAttribute('cx',p.px);c.setAttribute('cy',p.py);
+        c.setAttribute('r','2.5');c.setAttribute('fill',p.color);c.setAttribute('opacity','0.8');
+        svgEl.appendChild(c);
+      }
+    }
+    const div=document.createElement('div');
+    div.className='lbl';
+    div.style.cssText=`left:${p.lx}px;top:${p.ly}px;border-left:2.5px solid ${p.color};opacity:${p.alpha}`;
+    div.textContent=p.short;
+    div.onclick=()=>openCard({...p,color:p.color});
+    lblEl.appendChild(div);
+  });
+}
+
+// ── Filter ───────────────────────────────────────────────────────
+function applyFilter(){
+  const muni=document.getElementById('fMuni').value;
+  const q=document.getElementById('fSearch').value.toLowerCase();
+  let count=0;
+  items.forEach(it=>{
+    const show=(!muni||it.municipio===muni)&&(!q||it.empresa.toLowerCase().includes(q));
+    it.vis=show;
+    if(show){it.cm.addTo(map);count++;}
+    else map.removeLayer(it.cm);
+  });
+  document.getElementById('cntBadge').textContent=count+' empresas';
+  schedRedraw();
+}
+
+let _rt=null;
+function schedRedraw(){clearTimeout(_rt);_rt=setTimeout(redraw,80)}
+map.on('move zoom',()=>{svgEl.innerHTML='';lblEl.innerHTML=''});
+map.on('moveend zoomend',schedRedraw);
+setTimeout(redraw,250);
+</script>
+</body>
+</html>
